@@ -1,0 +1,25 @@
+---
+- name: playbook to check the Prod site
+  hosts: prod
+  tasks:
+    - name: Check Prod Server Health 
+      ping:
+      register: ping_result1
+
+    - name: Display Prod Server reachability Status
+      debug:
+        msg: "Server {{ inventory_hostname }} is {{ 'reachable' if ping_result1.ping else 'unreachable' }}"
+
+    
+
+- name: playbook to check dr site
+  hosts: dr
+  tasks:
+    - name: Check DR Server Health
+      ping:
+      register: ping_result2
+
+    - name: Display Prod Server reachability status 
+      debug:
+        msg: "Server {{ inventory_hostname }} is {{ 'reachable' if ping_result2.ping else 'unreachable' }}"
+        

@@ -1,0 +1,5 @@
+---
+- name: Check webservice is reachable or not
+  hosts: localhost
+  tasks:
+    - name: checking webserve

@@ -1,0 +1,471 @@
+---
+## Section to check Precheck on DR Sites
+
+- name: Check 0 - DR Pre Health Check
+  hosts: dr
+  gather_facts: false 
+  tasks:
+    
+     - name: Check DR Server Health
+       ping:
+       register: ping_status1
+
+     - name: Display Prod Server reachability Status
+       debug:
+         msg: "Server {{ inventory_hostname }} is {{ 'reachable' if ping_status1.ping else 'unreachable' }}"
+
+
+     - name: Setting rules in Prod Servers
+       shell: |
+          iptables -F
+          iptables-save
+          systemctl stop firewalld.service
+          setenforce 0
+          iptables -L
+       register: precheck_status
+
+     - name: Sv1
+       shell: |
+           systemctl start haproxy.service
+       register: sv1_status
+       ignore_errors: true
+       when: inventory_hostname in groups["drloadbalancer"]
+    
+     - name: Sv2
+       shell: |
+           systemctl start httpd.service
+       register: sv2_status
+       ignore_errors: true
+       when: inventory_hostname in groups["drwebserver"]
+     
+     - name: Sv3
+       shell: |
+           systemctl start haproxy.service
+           systemctl start keepalived.service
+       register: sv1_status
+       ignore_errors: true
+       when: inventory_hostname in groups["drdb"]
+
+     - name: Debug of Pre-Checks
+       debug:
+         msg: 
+         - "Status of Services are : {{ precheck_status }}"
+
+## Section to Check Web HAproxy status and health DR Site
+
+- name: Check 1 - Check Web Load Balancer Status
+  hosts: drloadbalancer
+  vars:
+    plbip: 192.168.56.115
+  gather_facts: false
+  tasks:
+
+    - name: Check Web Load Balancer health
+      shell: |
+        systemctl is-active haproxy.service
+      register: haproxy_status
+      ignore_errors: true
+
+    - name: Check url status of webserver 
+      uri:
+        url: http://{{ plbip }}/insert.php
+        return_content: no
+      register: haproxyurl_status
+      until: haproxyurl_status.status == 200
+      retries: 5
+      delay: 5
+      ignore_errors: true
+        
+    - name: Print Status of Web Load Balancer
+      debug:
+        msg:
+        - "HAProxy Service are  : {{ haproxy_status.stdout }}"
+        - "HAProxy Url are : {{ haproxyurl_status.status }}"
+
+
+## Section to Check httpd service and health DR Site
+
+- name: Check 2 - Check Web Serivce Status 
+  hosts: drwebserver
+  vars:
+    webip:
+      - 192.168.56.116
+      - 192.168.56.117
+  gather_facts: false
+  tasks:
+
+    - name: Check WebServer health
+      shell: |
+        systemctl is-active httpd.service
+      register: webserver_status
+      ignore_errors: true
+ 
+    - name: Check url status of WebServer
+      uri:
+        url: http://{{ item }}/insert.php
+        return_content: no
+      register: webserverurl_status
+      until: webserverurl_status.status == 200
+      retries: 5
+      delay: 5
+      loop: "{{ webip }}"
+      ignore_errors: true
+
+    - name: Print status if all services are working fine
+      debug:
+        msg:
+        - "WebServer Service are  : {{ webserver_status.stdout }}"
+        - "WebServer Url are  : {{ webserverurl_status }}"
+
+## Section to Check Mariadb Service and Health DR Site
+
+- name: Check 3 - Check DB Service Status
+  hosts: drdb
+  gather_facts: false
+  tasks:
+
+    - name: Check MariaDB health
+      shell: |
+        systemctl is-active mariadb.service 
+      register: db_status
+      ignore_errors: true
+
+    - name: Print status if all services are working fine
+      debug:
+        msg: 
+        - "DBService are : {{ db_status.stdout }}"
+
+## Section to check Precheck on PROD Site
+
+- name: Check 4 - PROD Pre Health Check
+  hosts: prod
+  gather_facts: false
+  tasks:
+    
+    - name: Check PROD Server Health
+      ping:
+      register: ping_status2
+
+    - name: Display PROD Server reachability Status
+      debug:
+        msg: "Server {{ inventory_hostname }} is {{ 'reachable' if ping_status2.ping else 'unreachable' }}"
+ 
+    - name: Sv4
+      shell: |
+          systemctl stop haproxy.service
+      register: sv1_status
+      ignore_errors: true
+      when: inventory_hostname in groups["prodloadbalancer"]
+
+    - name: Sv5
+      shell: |
+          systemctl stop httpd.service
+      register: sv2_status
+      ignore_errors: true
+      when: inventory_hostname in groups["prodwebserver"]
+
+    - name: Sv6
+      shell: |
+          systemctl stop haproxy.service
+          systemctl stop keepalived.service
+      register: sv1_status
+      ignore_errors: true
+      when: inventory_hostname in groups["proddb"]
+
+    - name: Setting rules in DR Servers
+      shell: |
+          iptables -F
+          iptables-save
+          systemctl stop firewalld.service
+          setenforce 0
+          iptables -L
+      register: precheck_status2
+
+    - name: Debug of Pre-Checks
+      debug:
+        msg:
+        - "Status of Services are : {{ precheck_status2 }}"
+
+## Moving Services from Production to PROD Servers ##
+
+- name: Check 5 - Preparing for Service Migration to PROD
+  hosts: dr
+  gather_facts: false
+  tasks:
+    ## Stopping and Disbale - Web Load Balancer 
+    - name: Stopping Load Balancer Service
+      shell: | 
+          systemctl stop haproxy.service
+      register: haproxystop_status
+      ignore_errors: true
+      when: inventory_hostname in groups["drloadbalancer"]
+    
+    - name: Disabelling Load Balancer Service auto Start
+      shell: |
+          systemctl disable haproxy.service
+      register: haproxtautostart_status
+      ignore_errors: true
+      when: inventory_hostname in groups["drloadbalancer"]
+    
+    - name: Stopping Load Balancer Service
+      shell: | 
+          systemctl is-active haproxy.service
+      register: haproxystop2_status
+      ignore_errors: true
+      when: inventory_hostname in groups["drloadbalancer"]
+
+    - name: Status of HAproxy Service
+      debug:
+        msg:
+        - "Haproxy Service Stopped Succesfully : {{ haproxystop2_status.stdout }}"
+      when: inventory_hostname in groups["drloadbalancer"]
+
+
+   ## Stopping and Disable - Web Services on Webservers
+
+    - name: Stopping services in web server 
+      shell: |
+          systemctl stop httpd.service
+      register: webservicestop_status
+      ignore_errors: true
+      when: inventory_hostname in groups["drwebserver"]
+
+    - name: Disable Web Service auto Start 
+      shell: |
+          systemctl disable httpd.service
+      register: webserviceautostart_status
+      ignore_errors: true
+      when: inventory_hostname in groups["drwebserver"]
+
+    - name: Stopping webserver Service
+      shell: |
+          systemctl is-active httpd.service
+      register: webservicestop2_status
+      ignore_errors: true
+      when: inventory_hostname in groups["drwebserver"]
+
+    - name: Status of stopped webserver Service
+      debug:
+        msg:
+        - "Webservice Stopped Succesfully : {{ webservicestop2_status.stdout }}"
+      when: inventory_hostname in groups["drwebserver"]
+
+  ## Stopping and disable DB Load Balancer
+    - name: Stopping DB LoadBalancer and virtual routing
+      shell: |
+          systemctl stop haproxy.service
+          systemctl stop keepalived.service
+      register: dbhaproxystop_status
+      ignore_errors: true
+      when: inventory_hostname in groups["drdb"]
+
+    - name: Disabelling DB Load Balancer Service auto Start
+      shell: |
+          systemctl disable haproxy.service
+          systemctl disable keepalived.service
+      register: dbhaproxyautostart_status
+      ignore_errors: true
+      when: inventory_hostname in groups["drdb"]
+
+    - name: Stopping Load Balancer and virtual routing Service
+      shell: |
+          systemctl is-active haproxy.service
+          systemctl is-active keepalived.service
+      register: dblbservicestop_status
+      ignore_errors: true
+      when: inventory_hostname in groups["drdb"]
+
+    - name: Status of stopped DB Load Balancer &  virtual routing Service
+      debug:
+        msg:
+        - "Load Balancer and Virtual Routing Stopped : {{ dblbservicestop_status.stdout }}"
+      when: inventory_hostname in groups["drdb"]
+
+  ## Checking Prod DB and Replication Status
+    - name: Check MariaDB health
+      shell: |
+          systemctl is-active mariadb.service
+      register: mariadb_status
+      ignore_errors: true
+      when: inventory_hostname in groups["drdb"]
+
+    - name: Check MariaDB replication status
+      shell: |
+          mysql -uroot -predhat -e "SHOW SLAVE STATUS\G"
+      register: mariadb_replication
+      ignore_errors: true
+      when: inventory_hostname in groups["drdb"]
+
+    - name: Status of stopped haproxy and virtual routing Service
+      debug:
+        msg:
+        - "Replication Status : {{ mariadb_replication.stdout }}"
+      when: inventory_hostname in groups["drdb"]
+
+ #   - name: Generate html report for Status
+  #    shell: >
+   #       echo "<html><body><h1>Health Report</h1><h2>Host:
+    #      {{ inventory_hostname }}</h2><ul><li>HAProxy and Webserver:
+     #     {{ 'Running' if webservicestop2_status|active else 'Not Running' }}</li><li>
+      #    MariaDB: {{ 'Running' if mariadb_status|active else 'Not Running' }}</li><li>MariaDB Replication:
+       #   {{ 'Running' if mariadb_replication|success else 'Not Running' }}</li></ul></body></html>" > health_report.html
+      #delegate_to: localhost
+      #run_once: true
+      #ignore_errors: true
+
+## Starting Services to PROD Site ##
+
+- name: Check 6 - Starting Services on PROD Site
+  hosts: prod
+  gather_facts: false
+  tasks:
+    
+    - name: Start Web Loadbalancer Service 
+      shell: |
+          systemctl start haproxy.service
+          systemctl is-active haproxy.service
+      register: prodhaproxy_status
+      ignore_errors: true
+      when: inventory_hostname in groups["prodloadbalancer"]
+
+    - name: PROD Load Balancer Service Status
+      debug:
+        msg:
+        - " PROD Load Balancer are : {{ prodhaproxy_status.stdout }}"
+      when: inventory_hostname in groups["prodloadbalancer"]
+
+    - name: Start Web Services
+      shell: |
+          systemctl start httpd.service
+      register: prodwebservice_status
+      ignore_errors: true
+      when: inventory_hostname in groups["prodwebserver"]
+
+    - name: Check Web Services start
+      shell: |
+          systemctl is-active httpd.service
+      register: prodwebservice2_status
+      ignore_errors: true
+      when: inventory_hostname in groups["prodwebserver"]
+    
+    - name: DR Web Server status
+      debug:
+        msg:
+        - " DR web server are : {{ prodwebservice2_status }}"
+      when: inventory_hostname in groups["prodwebserver"]
+
+## Section to Check Mariadb Service and Health
+
+- name: Check 7 - Check PROD DB  Service Status
+  hosts: proddb
+  gather_facts: false
+  tasks:
+
+    - name: Check MariaDB health
+      shell: |
+        systemctl is-active mariadb.service
+      register: proddb_status
+      ignore_errors: true
+
+    - name: Print status if all services are working fine
+      debug:
+        msg:
+        - "DBService are : {{ proddb_status.stdout }}"
+    
+    - name: Starting DB LoadBalancer and virtual routing
+      shell: |
+          systemctl start haproxy.service
+          systemctl start keepalived.service
+      register: prodhaproxystart_status
+      ignore_errors: true
+
+    - name: Disabelling DB Load Balancer Service auto Start
+      shell: |
+          systemctl disable haproxy.service
+          systemctl disable keepalived.service
+      register: prodhaproxyautostart_status
+      ignore_errors: true
+
+    - name: Check Load Balancer and virtual routing Service
+      shell: |
+          systemctl is-active haproxy.service
+          systemctl is-active keepalived.service
+      register: prddblbservicestart_status
+      ignore_errors: true
+
+    - name: Status of stopped DB Load Balancer &  virtual routing Service
+      debug:
+        msg:
+        - "Load Balancer and Virtual Routing are : {{ prddblbservicestart_status.stdout }}"
+    
+    - name: Check MariaDB replication status
+      shell: |
+          mysql -uroot -predhat -e "SHOW SLAVE STATUS\G"
+      register: mariadbprod_replication
+      ignore_errors: true
+
+    - name: Status of stopped haproxy and virtual routing Service
+      debug:
+        msg:
+        - "Replication Status : {{ mariadbprod_replication.stdout }}"
+
+
+## Section to check httpd service and health
+
+- name: Check 8 - Check web Service Status 
+  hosts: prodwebserver
+  gather_facts: false
+  vars:
+    prodwebip:
+      - 192.168.56.110
+      - 192.168.56.111
+  tasks:
+
+    - name: Check Url accessiblity - From Web Servers 
+      uri:
+        url: http://{{ item }}/insert.php
+        return_content: no
+      register: prodwebserverurl_status
+      until: prodwebserverurl_status.status == 200
+      retries: 2
+      delay: 2
+      loop: "{{ prodwebip }}"
+      ignore_errors: true
+
+    - name: Web Url Status
+      debug:
+        msg:
+        - "Web Url Status : {{ prodwebserverurl_status }}"
+
+## Section to check Loadbalancer Service and Health
+
+- name: Check 9 - Check Web Service From Load Balancer
+  hosts: localhost
+  gather_facts: false
+  #vars:
+   # drlbip:
+    #  - 192.168.56.115
+  tasks:
+
+    - name: Check Url accessibility - From Load Balancer
+      uri:
+        url: http://192.168.56.114/insert.php
+        return_content: no
+      register: prodloadbalancerurl_status
+      until:  prodloadbalancerurl_status.status == 200
+      retries: 5
+      delay: 5
+      ignore_errors: true
+
+    - name: Load Balancer Url Status
+      debug:
+        msg:
+        - "PROD Load Balancer Web Url Status : {{ prodloadbalancerurl_status }}"
+        
+
+######### END ########  
+
+ 
+
+
+        
