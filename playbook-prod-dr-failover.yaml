@@ -29,7 +29,7 @@
            systemctl start haproxy.service
        register: sv1_status
        ignore_errors: true
-       when: inventory_hostname in groups["prodloadbalancer"]
+       when: inventory_hostname == "prodloadbalancer"
     
      - name: Sv2
        shell: |
