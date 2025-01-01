@@ -1,29 +1,27 @@
 [prodwebserver]
-192.168.56.110
-192.168.56.111
+192.168.8.37
+192.168.8.38
 
 [drwebserver]
-192.168.56.116
-192.168.56.117
+192.168.8.41
+192.168.8.42
 
 [proddb]
-192.168.56.112
+192.168.8.39
 
 [drdb]
-192.168.56.113
+192.168.8.40
 
 [prodloadbalancer]
-192.168.56.114
+192.168.8.35
 
 [drloadbalancer]
-192.168.56.115
-
+192.168.8.36
 
 [prod:children]
 prodwebserver
 proddb
 prodloadbalancer
-
 
 [dr:children]
 drwebserver
