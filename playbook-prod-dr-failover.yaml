@@ -26,14 +26,14 @@
      - name: Sv1
        command: systemctl start haproxy.service
        register: sv1_status
-       ignore_errors: false
-       when: inventory_hostname in groups["prodloadbalancer"]
+       ignore_errors: true
+       when: inventory_hostname in groups['prodloadbalancer']
     
      - name: Sv2
        command: systemctl start httpd.service
        register: sv2_status
-       ignore_errors: false
-       when: inventory_hostname in groups["prodwebserver"]
+       ignore_errors: true
+       when: inventory_hostname in groups['prodwebserver']
      
      - name: Sv3
        command: "{{ item }}"
@@ -41,8 +41,8 @@
          - systemctl start haproxy.service
          - systemctl start keepalived.service
        register: sv1_status
-       ignore_errors: false
-       when: inventory_hostname in groups["proddb"]
+       ignore_errors: true
+       when: inventory_hostname in groups['proddb']
 
      - name: Debug of Pre-Checks
        debug:
