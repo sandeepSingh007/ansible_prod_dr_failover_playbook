@@ -29,23 +29,22 @@
        register: precheck_status
 
      - name: Sv1
-       shell: |
-           systemctl start haproxy.service
+       command: systemctl start haproxy.service
        register: sv1_status
        ignore_errors: true
        when: inventory_hostname in groups["prodloadbalancer"]
     
      - name: Sv2
-       shell: |
-           systemctl start httpd.service
+       command: systemctl start httpd.service
        register: sv2_status
        ignore_errors: true
        when: inventory_hostname in groups["prodwebserver"]
      
      - name: Sv3
-       shell: |
-           systemctl start haproxy.service
-           systemctl start keepalived.service
+       command: "{{ item }}"
+      with_items:
+        - systemctl start haproxy.service
+        - systemctl start keepalived.service
        register: sv1_status
        ignore_errors: true
        when: inventory_hostname in groups["proddb"]
