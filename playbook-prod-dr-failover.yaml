@@ -6,10 +6,6 @@
   gather_facts: false 
   tasks:
 
-     - name: Debug groups variable
-       ansible.builtin.debug:
-         msg: "{{ groups }}"
-    
      - name: Check Prod Server Health
        ping:
        register: ping_status1
@@ -17,7 +13,6 @@
      - name: Display Prod Server reachability Status
        debug:
          msg: "Server {{ inventory_hostname }} is {{ 'reachable' if ping_status1.ping else 'unreachable' }}"
-
 
      - name: Setting rules in Prod Servers
        shell: |
@@ -42,9 +37,9 @@
      
      - name: Sv3
        command: "{{ item }}"
-      with_items:
-        - systemctl start haproxy.service
-        - systemctl start keepalived.service
+       with_items:
+         - systemctl start haproxy.service
+         - systemctl start keepalived.service
        register: sv1_status
        ignore_errors: true
        when: inventory_hostname in groups["proddb"]
