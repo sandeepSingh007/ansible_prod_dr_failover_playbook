@@ -6,9 +6,9 @@
   gather_facts: false 
   tasks:
 
-      - name: Debug groups variable
-        ansible.builtin.debug:
-          msg: "{{ groups }}"
+     - name: Debug groups variable
+       ansible.builtin.debug:
+         msg: "{{ groups }}"
     
      - name: Check Prod Server Health
        ping:
