@@ -56,7 +56,7 @@
 - name: Check 1 - Check Web Load Balancer Status
   hosts: prodloadbalancer
   vars:
-    plbip: 192.168.56.114
+    plbip: 192.168.8.35
   gather_facts: false
   tasks:
 
@@ -89,8 +89,8 @@
   hosts: prodwebserver
   vars:
     webip:
-      - 192.168.56.110
-      - 192.168.56.111
+      - 192.168.8.37
+      - 192.168.8.38
   gather_facts: false
   tasks:
 
@@ -417,8 +417,8 @@
   gather_facts: false
   vars:
     drwebip:
-      - 192.168.56.116
-      - 192.168.56.117
+      - 192.168.8.41
+      - 192.168.8.42
   tasks:
 
     - name: Check Url accessiblity - From Web Servers 
@@ -449,7 +449,7 @@
 
     - name: Check Url accessibility - From Load Balancer
       uri:
-        url: http://192.168.56.115/insert.php
+        url: http://192.168.8.36/insert.php
         return_content: no
       register: drloadbalancerurl_status
       until:  drloadbalancerurl_status.status == 200
