@@ -29,7 +29,7 @@
            systemctl start haproxy.service
        register: sv1_status
        ignore_errors: true
-       when: inventory_hostname in groups["drloadbalancer"]
+       when: inventory_hostname in ['192.168.8.36']
     
      - name: Sv2
        shell: |
