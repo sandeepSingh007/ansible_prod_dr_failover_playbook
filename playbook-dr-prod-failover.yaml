@@ -22,6 +22,7 @@
           systemctl stop firewalld.service
           setenforce 0
           iptables -L
+       ignore_errors: true
        register: precheck_status
 
      - name: Sv1
@@ -179,6 +180,7 @@
           systemctl stop firewalld.service
           setenforce 0
           iptables -L
+      ignore_errors: true
       register: precheck_status2
 
     - name: Debug of Pre-Checks
